@@ -17,6 +17,7 @@ import re
 
 from dataset import data_util
 from dataset import image_util
+from dataset import point_transform
 from utils.mesh_io import filter_files
 from utils.other_utils import output_pred_ply, load_color_from_ply, face_labels_to_vertex_labels
 from utils.color_utils import FDI2label, label2color_upper, label2color_lower
@@ -57,13 +58,24 @@ class Teeth3DSDataset(Dataset):
 
         
         if is_train:
+            # self.point_transform = transforms.Compose(
+            #     [
+            #         data_util.PointcloudRandomRotate(angle_sigma=0.06, angle_clip=0.18),
+            #         data_util.PointcloudRandomShift(shift_range=0.1),
+            #         data_util.PointcloudToTensor(),
+            #         data_util.PointcloudNormalize(radius=1),
+            #         data_util.PointcloudSample(total=num_points, sample=sample_points, permute=True)
+            #     ]
+            # )
+
             self.point_transform = transforms.Compose(
                 [
-                    data_util.PointcloudRandomRotate(angle_sigma=0.06, angle_clip=0.18),
-                    data_util.PointcloudRandomShift(shift_range=0.1),
-                    data_util.PointcloudToTensor(),
-                    data_util.PointcloudNormalize(radius=1),
-                    data_util.PointcloudSample(total=num_points, sample=sample_points, permute=True)
+                    # point_transform.GridSample(grid_size=0.05, mode="train"),
+                    point_transform.RandomRotate(angle_sigma=0.06, angle_clip=0.18),
+                    point_transform.RandomShift(shift_range=0.1),
+                    point_transform.NormalizeCoord(),
+                    point_transform.PointcloudSample(total=num_points, sample=sample_points, permute=True),
+                    point_transform.ToTensor(),
                 ]
             )
 
@@ -71,7 +83,8 @@ class Teeth3DSDataset(Dataset):
                 image_util.RandScale([0.5, 2.0]), # args.scale_min, args.scale_max
                 image_util.RandRotate([-10, 10], padding=mean, ignore_label=255),
                 image_util.RandomGaussianBlur(),
-                image_util.RandomHorizontalFlip(),
+                # image_util.RandomHorizontalFlip(),
+                # image_util.Resize([465, 465]),
                 image_util.Crop([465, 465], crop_type='rand', padding=mean, ignore_label=255),
                 image_util.ToTensor(),
                 image_util.Normalize(mean=mean, std=std)
@@ -80,13 +93,15 @@ class Teeth3DSDataset(Dataset):
         else:
             self.point_transform = transforms.Compose(
                 [
-                    data_util.PointcloudToTensor(),
-                    data_util.PointcloudNormalize(radius=1),
-                    data_util.PointcloudSample(total=num_points, sample=sample_points, permute=False)
+                    # point_transform.GridSample(grid_size=0.05, mode="train"),
+                    point_transform.NormalizeCoord(),
+                    point_transform.PointcloudSample(total=num_points, sample=sample_points, permute=False),
+                    point_transform.ToTensor(),
                 ]
             )
 
             self.image_transform = image_util.Compose([
+                # image_util.Resize([465, 465]),
                 image_util.Crop([465, 465], crop_type='center', padding=mean, ignore_label=255),
                 image_util.ToTensor(),
                 image_util.Normalize(mean=mean, std=std)
@@ -323,11 +338,16 @@ class Teeth3DSDataset(Dataset):
             padding_labels = np.full((pad_points,), -1, dtype=labels.dtype)
             labels = np.concatenate((labels, padding_labels), axis=0)
 
-
-        pointcloud, labels, face_info = self.point_transform([pointcloud, labels, face_info])
+        data_dict = {
+            "coord": pointcloud[:, :3],
+            "normal": pointcloud[:, 3:],
+            "label": labels,
+            "face": face_info
+        }
+        data_dict = self.point_transform(data_dict)
 
         # boundary labels
-        boundary_labels = compute_boundary_mask(pointcloud[:, 6:], labels)  # (N,)
+        boundary_labels = compute_boundary_mask(data_dict["coord"], data_dict["label"])  # (N,)
 
         # image
         image_path_ls = sorted(glob(os.path.join(file_path, 'render', '*.png')), key=self.extract_view_idx) 
@@ -374,25 +394,25 @@ class Teeth3DSDataset(Dataset):
         cameras_k = torch.stack([torch.tensor(camera_params[i]["K"], dtype=torch.float32) for i in sample_views])
 
 
-        return_dict = {
-            "pointcloud": pointcloud, # (N_pc, 9) face center coord norm + face normal + face center coord ori
-            "labels": labels, # (N_pc)
-            "boundary_labels": boundary_labels, # (N_pc)
-            "point_coords": point_coords, # (N_vertices, 3) array
-            "face_info": face_info, # (N_pc, 3) array 
-            "renders": renders, # (N_v, 3, H, W)
-            "masks": masks, # (N_v, H, W)
-            "cameras_Rt": cameras_rt, # (N_v, 4, 4)
-            "cameras_K": cameras_k # (N_v, 3, 3)
-        }
+        data_dict.update({
+            # "coords": pointcloud, # (N_pc, 9) face center coord norm + face normal + face center coord ori
+            # "labels": labels, # (N_pc)
+            "boundary_label": boundary_labels, # (N_pc)
+            "vertice": point_coords, # (N_vertices, 3) array
+            # "faces": face_info, # (N_pc, 3) array 
+            "render": renders, # (N_v, 3, H, W)
+            "mask": masks, # (N_v, H, W)
+            "camera_Rt": cameras_rt, # (N_v, 4, 4)
+            "camera_K": cameras_k # (N_v, 3, 3)
+        })
 
-        return return_dict
+        return data_dict
     
     def _load_in_memory(self):
         for f in tqdm(self.file_names, desc="Loading point clouds into memory"):
             data_dict = self._get_data(f)
             file_name = f'{f.split("/")[-1]}_{f.split("/")[-2]}'
-            data_dict.update({"file_names": file_name})
+            data_dict.update({"file_name": file_name})
             self.in_memory_data.append(data_dict)
 
     def __len__(self):
@@ -406,7 +426,7 @@ class Teeth3DSDataset(Dataset):
             f = self.file_names[index]
             data_dict = self._get_data(f)
             file_name = f'{f.split("/")[-1]}_{f.split("/")[-2]}'
-            data_dict.update({"file_names": file_name})
+            data_dict.update({"file_name": file_name})
 
         return data_dict
 

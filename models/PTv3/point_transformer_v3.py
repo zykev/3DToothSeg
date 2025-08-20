@@ -1013,7 +1013,7 @@ class PointTransformerV3(PointModule):
             act_layer=act_layer,
         )
 
-    def forward(self, data_dict, point_to_pixel_feat=None):
+    def forward(self, data_dict):
         """
         A data_dict is a dictionary containing properties of a batched point cloud.
         It should contain the following properties for PTv3:
@@ -1026,8 +1026,8 @@ class PointTransformerV3(PointModule):
         device = data_dict['feat'].device
 
         if self.enable_pic_feat:
-            assert point_to_pixel_feat is not None, "point_to_pixel_feat is required for PointTransformerV3 with enable_pic_feat=True"
-            point_to_pixel_feat = self.extra_pic_feat(point_to_pixel_feat.long()).squeeze(2)
+            assert data_dict.get('point_to_pixel_feat') is not None, "point_to_pixel_feat is required for PointTransformerV3 with enable_pic_feat=True"
+            point_to_pixel_feat = self.extra_pic_feat(data_dict['point_to_pixel_feat'].long()).squeeze(2)
             feat = torch.cat([data_dict['feat'], point_to_pixel_feat], dim=2).contiguous()
         else:
             feat = data_dict['feat']
@@ -1080,8 +1080,14 @@ class PointTransformerV3(PointModule):
 class PointTransformerSeg(PointTransformerV3):
     def __init__(self, **kwargs):
         super(PointTransformerSeg, self).__init__(
-            enc_depths=[1,2,2,2,2], 
-            dec_depths=[1,1,1,1],
+            enc_depths=(1, 2, 2, 2, 2), 
+            stride=(4, 4, 4, 4),
+            enc_num_head=(2, 2, 4, 4, 8),
+            enc_patch_size=(256, 256, 256, 128, 64),
+            dec_depths=(1, 1, 1, 1),
+            dec_channels=(64, 64, 128, 256),
+            dec_num_head=(2, 2, 4, 4),
+            dec_patch_size=(256, 128, 64, 32),
             **kwargs
         )
 
@@ -1094,7 +1100,6 @@ if __name__ == '__main__':
         "feat": input_feat,
         "coord": input_coords,
         "grid_size": input_grid,
-        # "offset": torch.tensor([16000 * (i + 1) for i in range(4)], device=input_feat.device),
     }
     model = PointTransformerSeg().cuda()
     # 打印结构：假设输入是 (B, C, N)

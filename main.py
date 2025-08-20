@@ -83,7 +83,8 @@ class ToothSegmentationPipeline:
             loop = tqdm(self.train_dataloader, desc=f"Epoch [{epoch+1}/{self.args.epochs}]", leave=False)
 
             for batch_idx, batch_data in enumerate(loop):
-                pointcloud = batch_data['pointclouds'].to(self.device)
+                pc_feats = batch_data['pc_feats'].to(self.device)
+                pc_coords = batch_data['pc_coords'].to(self.device)
                 labels = batch_data['labels'].to(self.device)
                 boundary_labels = batch_data['boundary_labels'].to(self.device)
                 renders = batch_data['renders'].to(self.device)
@@ -93,7 +94,7 @@ class ToothSegmentationPipeline:
 
                 self.optimizer.zero_grad()
 
-                predict_pc_labels, predict_pc_boundary_labels, predict_2d_masks, predict_2d_aux, cbl_loss_aux = self.model(pointcloud, renders, cameras_Rt, cameras_K)
+                predict_pc_labels, predict_pc_boundary_labels, predict_2d_masks, predict_2d_aux, cbl_loss_aux = self.model(pc_coords, pc_feats, renders, cameras_Rt, cameras_K)
                 
                 # calculate losses
                 loss_3d = self.criterion_ce(predict_pc_labels, labels)
@@ -161,9 +162,10 @@ class ToothSegmentationPipeline:
         with torch.no_grad():
             loop_val = tqdm(self.test_dataloader, desc=f"Validating", leave=False)
             for batch_idx, batch_data in enumerate(loop_val):
-                pointcloud = batch_data['pointclouds'].to(self.device)
-                point_coords = batch_data['point_coords']
-                face_info = batch_data['face_infos']
+                pc_feats = batch_data['pc_feats'].to(self.device)
+                pc_coords = batch_data['pc_coords'].to(self.device)
+                point_coords = batch_data['vertices']
+                face_info = batch_data['faces']
                 file_name = batch_data['file_names']
                 labels = batch_data['labels'].to(self.device)
                 boundary_labels = batch_data['boundary_labels'].to(self.device)
@@ -173,7 +175,7 @@ class ToothSegmentationPipeline:
                 cameras_K = batch_data['cameras_K'].to(self.device)
 
 
-                point_seg_result, point_seg_boundary_result, _, _, _ = self.model(pointcloud, renders, cameras_Rt, cameras_K) # point_seg_result: (B, num_classes, N_pc)
+                point_seg_result, point_seg_boundary_result, _, _, _ = self.model(pc_coords, pc_feats, renders, cameras_Rt, cameras_K) # point_seg_result: (B, num_classes, N_pc)
                 # pred_softmax = torch.nn.functional.softmax(point_seg_result, dim=1)
                 # _, pred_classes = torch.max(pred_softmax, dim=1) # (B, N_pc)
 
