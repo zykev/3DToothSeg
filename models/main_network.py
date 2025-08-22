@@ -11,7 +11,7 @@ from utils.color_utils import color2label
 
 class ToothSegNet(nn.Module):
     def __init__(self, in_channels=6, num_classes=17, 
-                 grid_size = 0.01,
+                 grid_size = 0.05,
                  pretrain_2d_path='.checkpoints/PSPNet/train_ade20k_pspnet50_epoch_100.pth',
                  use_pretrain=None,
                  ):
@@ -248,7 +248,7 @@ class ToothSegNet(nn.Module):
             torch.cat(outputs3, dim=0) if outputs3 is not None else None
         )
 
-    def forward(self, pc_coords, pc_feats, renders=None, cameras_Rt=None, cameras_K=None):
+    def forward(self, pc_coords, pc_coords_ori, pc_feats, renders=None, cameras_Rt=None, cameras_K=None):
 
         device = pc_feats.device
         bs = pc_coords.shape[0]
@@ -264,7 +264,7 @@ class ToothSegNet(nn.Module):
             predict_2d_masks, predict_2d_aux, feature_2d = self.seg_model_2d_forward(renders)
         # cameras_Rt (B, N_v, 4, 4), cameras_K (B, N_v, 3, 3)
         # 注意投影的时候点云坐标不能是标准化后的
-        projected_pc = self.project_points(cameras_Rt, cameras_K, pc_coords, render_size)  # (B, N_v, N_pc, 2)
+        projected_pc = self.project_points(cameras_Rt, cameras_K, pc_coords_ori, render_size)  # (B, N_v, N_pc, 2)
         # point_features_2d = self.sample_point_features_from_2d(projected_pc, feature_2d) # (B, N_pc, C)
         point_features_2d = self.get_pixel_labels(projected_pc, predict_2d_masks) # (B, N_pc, 1)
 

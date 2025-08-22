@@ -59,12 +59,15 @@ class NormalizeCoord(object):
     def __call__(self, data_dict):
         assert "coord" in data_dict.keys()
         assert "normal" in data_dict.keys()
+
         # modified from pointnet2
         centroid = np.mean(data_dict["coord"], axis=0)
         coord_norm = data_dict["coord"] - centroid
         m = np.max(np.sqrt(np.sum(coord_norm ** 2, axis=1)))
         coord_norm = coord_norm / m
 
+        data_dict["coord_ori"] = data_dict["coord"].copy()
+        data_dict["coord"] = coord_norm
         data_dict["feat"] = np.concatenate(
             [coord_norm, data_dict["normal"]], axis=-1
         )

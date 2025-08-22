@@ -347,7 +347,7 @@ class Teeth3DSDataset(Dataset):
         data_dict = self.point_transform(data_dict)
 
         # boundary labels
-        boundary_labels = compute_boundary_mask(data_dict["coord"], data_dict["label"])  # (N,)
+        boundary_labels = compute_boundary_mask(data_dict["coord_ori"], data_dict["label"])  # (N,)
 
         # image
         image_path_ls = sorted(glob(os.path.join(file_path, 'render', '*.png')), key=self.extract_view_idx) 

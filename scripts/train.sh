@@ -9,7 +9,7 @@ python main.py \
     --num_points 16000 \
     --sample_points 16000 \
     --sample_views 4 \
-    --batch_size 4 \
+    --batch_size 2 \
     --epochs 100 \
     --lr 1e-3 \
     --save_dir exp/baseline_biou_ptv3 \

@@ -2,6 +2,7 @@ import torch
 
 def custom_collate_fn(batch):
         coords = []
+        coords_ori = []
         feats = []
         labels = []
         boundary_labels = []
@@ -16,6 +17,7 @@ def custom_collate_fn(batch):
         for data_dict in batch:
             # 解包数据字典
             coord = data_dict['coord']
+            coord_ori = data_dict['coord_ori']
             feat = data_dict['feat']
             label = data_dict['label']
             boundary_label = data_dict['boundary_label']
@@ -28,6 +30,7 @@ def custom_collate_fn(batch):
             file_name = data_dict['file_name']
 
             coords.append(coord)
+            coords_ori.append(coord_ori)
             feats.append(feat)
             labels.append(label)
             boundary_labels.append(boundary_label)
@@ -42,6 +45,7 @@ def custom_collate_fn(batch):
         # 堆叠固定 shape 的数据
         feats = torch.stack(feats)  # (B, num_points, 6)
         coords = torch.stack(coords)  # (B, num_points, 3)
+        coords_ori = torch.stack(coords_ori)  # (B, num_points, 3)
         labels = torch.stack(labels)            # (B, num_points)
         boundary_labels = torch.stack(boundary_labels)  # (B, num_points)
         renders = torch.stack(renders)          # (B, num_views, 3, H, W)
@@ -52,6 +56,7 @@ def custom_collate_fn(batch):
         return_dict = {
             'pc_feats': feats,
             'pc_coords': coords,
+            'pc_coords_ori': coords_ori,
             'labels': labels,
             'boundary_labels': boundary_labels,
             'vertices': vertices_list,  # 保持为 list of np.array

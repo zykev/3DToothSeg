@@ -837,7 +837,7 @@ class PointTransformerV3(PointModule):
         pre_norm=True,
         shuffle_orders=True,
         enable_rpe=False,
-        enable_flash=False,
+        enable_flash=True,
         upcast_attention=False,
         upcast_softmax=False,
         cls_mode=False,
@@ -1080,8 +1080,14 @@ class PointTransformerV3(PointModule):
 class PointTransformerSeg(PointTransformerV3):
     def __init__(self, **kwargs):
         super(PointTransformerSeg, self).__init__(
-            enc_depths=[1,2,2,2,2], 
-            dec_depths=[1,1,1,1],
+            enc_depths=(1, 2, 2, 2, 2), 
+            stride=(4, 4, 4, 4),
+            enc_num_head=(2, 2, 4, 4, 8),
+            enc_patch_size=(256, 256, 128, 64, 32),
+            dec_depths=(1, 1, 1, 1),
+            dec_channels=(64, 64, 128, 256),
+            dec_num_head=(2, 2, 4, 4),
+            dec_patch_size=(256, 128, 64, 32),
             **kwargs
         )
 
@@ -1096,6 +1102,10 @@ if __name__ == '__main__':
         "grid_size": input_grid,
         # "offset": torch.tensor([16000 * (i + 1) for i in range(4)], device=input_feat.device),
     }
+    input_dict["grid_coord"] = torch.div(
+                input_coords - input_coords.min(0)[0], input_grid, rounding_mode="trunc"
+            ).int()
+
     model = PointTransformerSeg().cuda()
     # 打印结构：假设输入是 (B, C, N)
     # 打印网络结构
